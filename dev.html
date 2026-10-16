@@ -1,7 +1,9 @@
-<html lang="ru"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#07090b">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#07090b" />
 <title>Q FITNESS — 3D тренажёр</title>
 <style>
   :root{
@@ -111,25 +113,36 @@
 </head>
 <body>
 
-<canvas id="scene" data-engine="three.js r161" width="926" height="768" style="touch-action: none;"></canvas>
+<canvas id="scene"></canvas>
 
 <div class="topbar">
-  
-  <div class="badge" id="badge">Oxion</div>
+  <div class="brand">
+    <div class="logo">O</div>
+    <div>
+      <div class="title">Oxion</div>
+      <div class="subtitle">3D тренажёр мышц</div>
+    </div>
+  </div>
+  <div class="badge" id="badge">Verifure Ai</div>
 </div>
 
-<div class="hint hide" id="hint">Вращайте модель · коснитесь мышцы</div>
+<div class="hint" id="hint">Вращайте модель · коснитесь мышцы</div>
 
 <div class="panel">
-  <div class="chips" id="chips"><button class="chip" type="button" data-key="delts">Дельты</button><button class="chip" type="button" data-key="chest">Грудь</button><button class="chip" type="button" data-key="arms">Руки</button><button class="chip" type="button" data-key="abs">Пресс</button><button class="chip" type="button" data-key="back">Спина</button><button class="chip" type="button" data-key="legs">Ноги</button></div>
+  <div class="chips" id="chips"></div>
   <div class="actions">
     <button class="ghost" id="resetBtn">Сбросить выбор</button>
     <label class="ghost" for="glbInput">Загрузить .glb</label>
-    <input id="glbInput" type="file" accept=".glb,.gltf,model/gltf-binary" hidden="">
+    <input id="glbInput" type="file" accept=".glb,.gltf,model/gltf-binary" hidden />
   </div>
 </div>
 
-
+<div class="loader" id="loader">
+  <div style="text-align:center">
+    <div class="spinner"></div>
+    <div>Инициализация 3D…</div>
+  </div>
+</div>
 
 <script type="importmap">
 {
@@ -728,6 +741,5 @@ window.QFitness3D = {
   scene, camera, renderer, controls,
 };
 </script>
-
-
-</body></html>
+</body>
+</html>
