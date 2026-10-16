@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#07090b" />
+<title>Q FITNESS — 3D тренажёр</title>
+<style>
+  :root{
+    --neon:#2bff88;
+    --bg:#07090b;
+    --card:#11161a;
+    --stroke:#1e262c;
+    --text:#e8f2ec;
+    --muted:#8a9a92;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    height:100%;margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+    overflow:hidden;overscroll-behavior:none;
+    -webkit-user-select:none;user-select:none;
+  }
+  #scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+
+  /* ---------- Верхняя панель ---------- */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:5;
+    padding:calc(14px + env(safe-area-inset-top)) 18px 14px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    pointer-events:none;
+  }
+  .brand{display:flex;align-items:center;gap:10px}
+  .logo{
+    width:36px;height:36px;border-radius:12px;display:grid;place-items:center;
+    background:#0d1a13;border:1px solid rgba(43,255,136,.55);
+    box-shadow:0 0 18px rgba(43,255,136,.25), inset 0 0 12px rgba(43,255,136,.12);
+    color:var(--neon);font-weight:800;font-size:18px;
+  }
+  .title{font-size:15px;font-weight:700;letter-spacing:.4px}
+  .subtitle{font-size:11px;color:var(--muted);margin-top:1px}
+  .badge{
+    pointer-events:auto;font-size:10px;font-weight:700;letter-spacing:.8px;
+    padding:6px 10px;border-radius:999px;color:var(--neon);
+    background:#0d1a13;border:1px solid rgba(43,255,136,.35);
+  }
+
+  /* ---------- Нижняя панель ---------- */
+  .panel{
+    position:fixed;left:0;right:0;bottom:0;z-index:5;
+    padding:16px 0 calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, rgba(7,9,11,.97) 40%, rgba(7,9,11,0));
+    pointer-events:none;
+  }
+  .chips{
+    display:flex;gap:8px;overflow-x:auto;padding:2px 16px 6px;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    pointer-events:auto;
+  }
+  .chips::-webkit-scrollbar{display:none}
+  .chip{
+    flex:0 0 auto;appearance:none;cursor:pointer;
+    padding:11px 18px;border-radius:16px;
+    background:var(--card);border:1px solid var(--stroke);
+    color:var(--muted);font-size:14px;font-weight:600;font-family:inherit;
+    transition:color .25s, border-color .25s, box-shadow .25s, background .25s, transform .12s;
+  }
+  .chip:active{transform:scale(.96)}
+  .chip.active{
+    color:var(--neon);background:#0d1a13;
+    border-color:rgba(43,255,136,.75);
+    box-shadow:0 0 0 1px rgba(43,255,136,.25), 0 0 22px rgba(43,255,136,.30),
+               inset 0 0 18px rgba(43,255,136,.10);
+  }
+
+  .actions{
+    display:flex;gap:16px;align-items:center;justify-content:center;
+    padding:10px 16px 0;pointer-events:auto;
+  }
+  .ghost{
+    appearance:none;cursor:pointer;background:none;border:none;
+    color:var(--muted);font-size:12px;font-weight:600;font-family:inherit;
+    padding:6px 8px;border-radius:10px;transition:color .2s;
+  }
+  .ghost:active{color:var(--neon)}
+  .hint{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    font-size:12px;color:var(--muted);letter-spacing:.3px;text-align:center;
+    pointer-events:none;z-index:4;transition:opacity .8s;opacity:1;
+    padding:10px 16px;border-radius:14px;background:rgba(17,22,26,.75);
+    border:1px solid var(--stroke);backdrop-filter:blur(8px);
+  }
+  .hint.hide{opacity:0}
+
+  /* ---------- Загрузка ---------- */
+  .loader{
+    position:fixed;inset:0;z-index:20;display:grid;place-items:center;
+    background:rgba(7,9,11,.92);transition:opacity .5s;font-size:13px;color:var(--muted);
+  }
+  .loader.hide{opacity:0;pointer-events:none}
+  .spinner{
+    width:34px;height:34px;border-radius:50%;margin:0 auto 14px;
+    border:2px solid rgba(43,255,136,.18);border-top-color:var(--neon);
+    animation:spin .9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media (min-width:720px){
+    .chips{justify-content:center;flex-wrap:wrap;overflow:visible}
+    .chip{padding:12px 22px;font-size:15px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="logo">Q</div>
+    <div>
+      <div class="title">Q FITNESS</div>
+      <div class="subtitle">3D тренажёр мышц</div>
+    </div>
+  </div>
+  <div class="badge" id="badge">PLACEHOLDER</div>
+</div>
+
+<div class="hint" id="hint">Вращайте модель · коснитесь мышцы</div>
+
+<div class="panel">
+  <div class="chips" id="chips"></div>
+  <div class="actions">
+    <button class="ghost" id="resetBtn">Сбросить выбор</button>
+    <label class="ghost" for="glbInput">Загрузить .glb</label>
+    <input id="glbInput" type="file" accept=".glb,.gltf,model/gltf-binary" hidden />
+  </div>
+</div>
+
+<div class="loader" id="loader">
+  <div style="text-align:center">
+    <div class="spinner"></div>
+    <div>Инициализация 3D…</div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+
+/* ============================================================
+   1. КОНСТАНТЫ
+   ============================================================ */
+const NEON = 0x2bff88;
+
+const MUSCLES = [
+  { key: 'delts', label: 'Дельты' },
+  { key: 'chest', label: 'Грудь'  },
+  { key: 'arms',  label: 'Руки'   },
+  { key: 'abs',   label: 'Пресс'  },
+  { key: 'back',  label: 'Спина'  },
+  { key: 'legs',  label: 'Ноги'   },
+];
+const MUSCLE_KEYS = MUSCLES.map(m => m.key);
+
+// Положите model.glb рядом с index.html — он подхватится автоматически
+const MODEL_URL = 'model.glb';
+
+/* ============================================================
+   2. РЕНДЕРЕР / СЦЕНА / КАМЕРА
+   ============================================================ */
+const canvas   = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({
+  canvas, antialias: true, alpha: false, powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07090b);
+
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 1.15, 3.1);
+
+/* ---------- Свет ---------- */
+scene.add(new THREE.HemisphereLight(0xa8d8ff, 0x0d1216, 0.85));
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+keyLight.position.set(2.6, 4.2, 3.2);
+scene.add(keyLight);
+
+const rimLight = new THREE.DirectionalLight(NEON, 2.0);
+rimLight.position.set(-3.2, 2.4, -3.0);
+scene.add(rimLight);
+
+const fillLight = new THREE.DirectionalLight(0x7fa8ff, 0.7);
+fillLight.position.set(-2.2, 1.4, 3.0);
+scene.add(fillLight);
+
+/* ---------- Контролы ---------- */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.95, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.075;
+controls.enablePan = false;
+controls.minDistance = 1.25;
+controls.maxDistance = 5.5;
+controls.minPolarAngle = 0.22;
+controls.maxPolarAngle = Math.PI - 0.22;
+controls.rotateSpeed = 0.85;
+controls.zoomSpeed = 0.8;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.85;
+controls.update();
+
+let idleTimer = null;
+controls.addEventListener('start', () => {
+  controls.autoRotate = false;
+  clearTimeout(idleTimer);
+});
+controls.addEventListener('end', () => {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { controls.autoRotate = true; }, 4500);
+});
+
+/* ---------- Неоновая «земля» ---------- */
+function makeGlowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0.00, 'rgba(43,255,136,0.38)');
+  g.addColorStop(0.35, 'rgba(43,255,136,0.11)');
+  g.addColorStop(1.00, 'rgba(43,255,136,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.2, 3.2),
+  new THREE.MeshBasicMaterial({
+    map: makeGlowTexture(), transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending
+  })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = 0.002;
+scene.add(ground);
+
+/* ============================================================
+   3. СОСТОЯНИЕ
+   ============================================================ */
+const pickables  = [];              // меши, доступные для raycast
+const selected   = new Set();       // выбранные группы мышц
+let currentModel = null;            // текущая модель (placeholder или GLB)
+
+/* ============================================================
+   4. ОПРЕДЕЛЕНИЕ МЫШЦЫ ПО ИМЕНИ МЕША
+   ============================================================ */
+const NAME_MAP = [
+  ['delts', ['delts', 'delt', 'delta', 'shoulder', 'плеч', 'дельт', 'трапец']],
+  ['chest', ['chest', 'pectoral', 'pec', 'breast', 'груд', 'пек']],
+  ['arms',  ['arms', 'arm', 'bicep', 'tricep', 'forearm', 'hand', 'рука', 'рук', 'бицеп', 'трицеп']],
+  ['abs',   ['abs', 'abdom', 'core', 'belly', 'пресс', 'живот', 'абс']],
+  ['back',  ['back', 'lat', 'spine', 'trap', 'спин', 'широч', 'поясниц']],
+  ['legs',  ['legs', 'leg', 'thigh', 'calf', 'quad', 'glute', 'hamstring', 'foot', 'ног', 'бедр', 'квадр', 'ягод', 'голен']],
+];
+function muscleFromName(name) {
+  const n = String(name || '').toLowerCase();
+  if (!n) return null;
+  for (const [key, words] of NAME_MAP) {
+    if (words.some(w => n.includes(w))) return key;
+  }
+  return null;
+}
+
+/* ============================================================
+   5. ПОДГОТОВКА МОДЕЛИ (клонирование материалов + сбор мешей)
+   ============================================================ */
+function prepare(root) {
+  pickables.length = 0;
+
+  root.traverse(obj => {
+    if (!obj.isMesh) return;
+    const key = obj.userData.muscle || muscleFromName(obj.name);
+    if (!key || !MUSCLE_KEYS.includes(key)) return;
+
+    obj.userData.muscle = key;
+    obj.userData.glow   = 0;
+
+    // клонируем материал, чтобы подсветка не влияла на другие меши
+    if (Array.isArray(obj.material)) {
+      obj.material = obj.material.map(m => {
+        const c = m.clone();
+        c.emissive = new THREE.Color(NEON);
+        c.emissiveIntensity = 0;
+        return c;
+      });
+    } else {
+      const c = obj.material.clone();
+      c.emissive = new THREE.Color(NEON);
+      c.emissiveIntensity = 0;
+      obj.material = c;
+    }
+
+    pickables.push(obj);
+  });
+
+  return pickables.length;
+}
+
+function setGlow(mesh, v) {
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  for (const m of mats) {
+    if (m && m.emissiveIntensity !== undefined) m.emissiveIntensity = v;
+  }
+}
+
+/* ============================================================
+   6. PLACEHOLDER-ФИГУРА
+   Каждый меш получает userData.muscle — та же схема, что и у GLB.
+   ============================================================ */
+function buildPlaceholder() {
+  const root = new THREE.Group();
+  root.name = 'Q_Placeholder';
+
+  const matSkin  = () => new THREE.MeshStandardMaterial({ color: 0xd8a98c, roughness: 0.78, metalness: 0.02 });
+  const matCloth = () => new THREE.MeshStandardMaterial({ color: 0x14181d, roughness: 0.58, metalness: 0.18 });
+  const matHair  = () => new THREE.MeshStandardMaterial({ color: 0x1b1a20, roughness: 0.55, metalness: 0.08 });
+  const matNeon  = () => new THREE.MeshStandardMaterial({
+    color: NEON, emissive: NEON, emissiveIntensity: 2.2, roughness: 0.3, metalness: 0.1
+  });
+
+  function M(parent, geo, mat, muscle, name, pos, rot, scl) {
+    const mesh = new THREE.Mesh(geo, mat());
+    mesh.name = name;
+    if (muscle) mesh.userData.muscle = muscle;
+    if (pos) mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    if (scl) mesh.scale.set(scl[0], scl[1], scl[2]);
+    parent.add(mesh);
+    return mesh;
+  }
+
+  /* ---------- НОГИ ---------- */
+  for (const side of [-1, 1]) {
+    const x = 0.095 * side;
+    // бедро
+    M(root, new THREE.CapsuleGeometry(0.084, 0.30, 6, 18), matSkin, 'legs',
+      'q_leg_thigh', [x, 0.67, 0]);
+    // голень
+    M(root, new THREE.CapsuleGeometry(0.060, 0.24, 6, 18), matSkin, 'legs',
+      'q_leg_calf', [x, 0.26, 0.004]);
+    // стопа
+    M(root, new THREE.BoxGeometry(0.085, 0.075, 0.20), matCloth, 'legs',
+      'q_leg_foot', [x, 0.05, 0.045]);
+  }
+
+  /* ---------- ШОРТЫ ---------- */
+  M(root, new THREE.CylinderGeometry(0.132, 0.150, 0.24, 24, 1), matCloth, 'legs',
+    'q_shorts_hip', [0, 0.99, 0], null, [1, 1, 0.84]);
+
+  for (const side of [-1, 1]) {
+    M(root, new THREE.CylinderGeometry(0.108, 0.100, 0.16, 20, 1), matCloth, 'legs',
+      'q_shorts_leg', [0.095 * side, 0.87, 0], null, [1, 1, 0.92]);
+    // неоновая лампаса
+    M(root, new THREE.BoxGeometry(0.010, 0.20, 0.032), matNeon, null,
+      'q_deco_stripe', [0.146 * side, 0.99, 0]);
+  }
+
+  /* ---------- ТОРС: НИЗ (пресс / поясница) ---------- */
+  M(root, new THREE.CylinderGeometry(0.118, 0.128, 0.28, 24, 1, false, -Math.PI / 2, Math.PI),
+    matSkin, 'abs', 'q_abs', [0, 1.19, 0], null, [1, 1, 0.78]);
+
+  M(root, new THREE.CylinderGeometry(0.118, 0.128, 0.28, 24, 1, false, Math.PI / 2, Math.PI),
+    matSkin, 'back', 'q_back_lower', [0, 1.19, 0], null, [1, 1, 0.78]);
+
+  /* ---------- ТОРС: ВЕРХ (топ) ---------- */
+  M(root, new THREE.CylinderGeometry(0.130, 0.120, 0.24, 24, 1, false, -Math.PI / 2, Math.PI),
+    matCloth, 'chest', 'q_chest', [0, 1.42, 0], null, [1, 1, 0.80]);
+
+  M(root, new THREE.CylinderGeometry(0.130, 0.120, 0.24, 24, 1, false, Math.PI / 2, Math.PI),
+    matCloth, 'back', 'q_back_upper', [0, 1.42, 0], null, [1, 1, 0.80]);
+
+  // лёгкий объём груди
+  for (const side of [-1, 1]) {
+    M(root, new THREE.SphereGeometry(0.058, 18, 14), matCloth, 'chest',
+      'q_chest_bust', [0.052 * side, 1.40, 0.078], null, [1, 0.95, 0.8]);
+  }
+
+  /* ---------- ДЕЛЬТЫ ---------- */
+  for (const side of [-1, 1]) {
+    M(root, new THREE.SphereGeometry(0.074, 20, 16), matSkin, 'delts',
+      'q_delt', [0.140 * side, 1.475, 0], null, [1, 0.92, 0.95]);
+  }
+
+  /* ---------- ШЕЯ ---------- */
+  M(root, new THREE.CylinderGeometry(0.046, 0.056, 0.14, 16), matSkin, 'delts',
+    'q_neck', [0, 1.575, 0]);
+
+  /* ---------- ГОЛОВА / ВОЛОСЫ ---------- */
+  M(root, new THREE.SphereGeometry(0.104, 26, 20), matSkin, null,
+    'q_head', [0, 1.735, 0.008], null, [1, 1.12, 1.02]);
+
+  M(root, new THREE.SphereGeometry(0.108, 26, 20), matHair, null,
+    'q_hair', [0, 1.762, -0.022], null, [1.06, 1.02, 1.04]);
+
+  M(root, new THREE.CapsuleGeometry(0.042, 0.20, 6, 14), matHair, null,
+    'q_hair_tail', [0, 1.63, -0.115], [0.42, 0, 0]);
+
+  /* ---------- РУКИ ---------- */
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.name = 'q_arm_' + (side < 0 ? 'L' : 'R');
+    arm.position.set(0.140 * side, 1.470, 0);
+    arm.rotation.z = 0.15 * side;
+    root.add(arm);
+
+    M(arm, new THREE.CapsuleGeometry(0.052, 0.19, 6, 16), matSkin, 'arms',
+      'q_arm_upper', [0, -0.155, 0]);
+
+    M(arm, new THREE.CapsuleGeometry(0.042, 0.18, 6, 16), matSkin, 'arms',
+      'q_arm_fore', [0, -0.430, 0]);
+
+    M(arm, new THREE.CapsuleGeometry(0.036, 0.05, 6, 14), matSkin, 'arms',
+      'q_arm_hand', [0, -0.600, 0], null, [1, 1, 0.7]);
+  }
+
+  /* ---------- НЕОНОВАЯ ОТДЕЛКА (не участвует в подсветке) ---------- */
+  // кант по верху топа
+  M(root, new THREE.CylinderGeometry(0.133, 0.133, 0.014, 28, 1, true), matNeon, null,
+    'q_deco_band', [0, 1.525, 0], null, [1, 1, 0.80]);
+
+  // логотип Q на груди
+  const logo = new THREE.Group();
+  logo.name = 'q_deco_logo';
+  logo.position.set(0, 1.478, 0.106);
+
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.030, 0.008, 10, 28), matNeon());
+  logo.add(ring);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.030, 0.009, 0.009), matNeon());
+  tail.position.set(0.018, -0.018, 0);
+  tail.rotation.z = -Math.PI / 4;
+  logo.add(tail);
+
+  root.add(logo);
+
+  return root;
+}
+
+/* ============================================================
+   7. ЗАГРУЗКА GLB
+   ============================================================ */
+const loader = new GLTFLoader();
+
+function loadGLB(url) {
+  return new Promise((resolve, reject) => {
+    loader.load(
+      url,
+      gltf => { mountModel(gltf.scene); resolve(gltf); },
+      undefined,
+      err  => reject(err)
+    );
+  });
+}
+
+function disposeTree(obj) {
+  obj.traverse(o => {
+    if (o.isMesh) {
+      o.geometry?.dispose();
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => m?.dispose?.());
+    }
+  });
+}
+
+function mountModel(sourceRoot) {
+  // убираем предыдущую модель
+  if (currentModel) {
+    scene.remove(currentModel);
+    disposeTree(currentModel);
+    currentModel = null;
+  }
+
+  // нормализуем: высота 1.8, ступни на y=0, центр по X/Z
+  const holder = new THREE.Group();
+  holder.add(sourceRoot);
+
+  let box  = new THREE.Box3().setFromObject(sourceRoot);
+  const size = box.getSize(new THREE.Vector3());
+  const s = 1.8 / (size.y || 1);
+  sourceRoot.scale.setScalar(s);
+
+  box = new THREE.Box3().setFromObject(sourceRoot);
+  const center = box.getCenter(new THREE.Vector3());
+  sourceRoot.position.x -= center.x;
+  sourceRoot.position.z -= center.z;
+  sourceRoot.position.y -= box.min.y;
+
+  scene.add(holder);
+  currentModel = holder;
+
+  const count = prepare(holder);
+
+  // фокус камеры
+  controls.target.set(0, 0.95, 0);
+  controls.update();
+
+  return count;
+}
+
+/* ============================================================
+   8. RAYCASTING / ВЫБОР
+   ============================================================ */
+const raycaster = new THREE.Raycaster();
+const ndc       = new THREE.Vector2();
+
+let downX = 0, downY = 0, downT = 0, dragged = false;
+
+const el = renderer.domElement;
+
+el.addEventListener('pointerdown', e => {
+  downX = e.clientX; downY = e.clientY;
+  downT = performance.now();
+  dragged = false;
+}, { passive: true });
+
+el.addEventListener('pointermove', e => {
+  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 8) dragged = true;
+}, { passive: true });
+
+el.addEventListener('pointerup', e => {
+  if (dragged) return;                       // это было вращение
+  if (performance.now() - downT > 700) return; // долгое удержание
+  handleTap(e.clientX, e.clientY);
+}, { passive: true });
+
+function handleTap(clientX, clientY) {
+  const rect = el.getBoundingClientRect();
+  ndc.x =  ((clientX - rect.left) / rect.width)  * 2 - 1;
+  ndc.y = -((clientY - rect.top)  / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(pickables, false);
+  if (!hits.length) return;
+
+  toggleMuscle(hits[0].object.userData.muscle);
+  hideHint();
+}
+
+/* ============================================================
+   9. ЛОГИКА ВЫБОРА
+   ============================================================ */
+function toggleMuscle(key, force) {
+  if (!key || !MUSCLE_KEYS.includes(key)) return;
+  const want = (force === undefined) ? !selected.has(key) : !!force;
+
+  if (want) selected.add(key);
+  else      selected.delete(key);
+
+  syncUI();
+}
+
+function selectOnly(key) {
+  selected.clear();
+  if (key) selected.add(key);
+  syncUI();
+}
+
+function resetSelection() {
+  selected.clear();
+  syncUI();
+}
+
+/* ============================================================
+   10. UI
+   ============================================================ */
+const chipsEl = document.getElementById('chips');
+const badgeEl = document.getElementById('badge');
+const hintEl  = document.getElementById('hint');
+
+const chipMap = new Map();
+
+MUSCLES.forEach(m => {
+  const btn = document.createElement('button');
+  btn.className = 'chip';
+  btn.type = 'button';
+  btn.dataset.key = m.key;
+  btn.textContent = m.label;
+  btn.addEventListener('click', () => toggleMuscle(m.key));
+  chipsEl.appendChild(btn);
+  chipMap.set(m.key, btn);
+});
+
+function syncUI() {
+  chipMap.forEach((btn, key) => {
+    btn.classList.toggle('active', selected.has(key));
+  });
+}
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  resetSelection();
+  hideHint();
+});
+
+let hintHidden = false;
+function hideHint() {
+  if (hintHidden) return;
+  hintHidden = true;
+  hintEl.classList.add('hide');
+}
+setTimeout(hideHint, 7000);
+
+/* ---------- Загрузка своего .glb ---------- */
+document.getElementById('glbInput').addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const url = URL.createObjectURL(file);
+  badgeEl.textContent = 'LOADING…';
+
+  loadGLB(url)
+    .then(() => {
+      URL.revokeObjectURL(url);
+      badgeEl.textContent = 'GLB MODEL';
+      resetSelection();
+      hideHint();
+    })
+    .catch(err => {
+      URL.revokeObjectURL(url);
+      badgeEl.textContent = 'ERROR';
+      alert('Не удалось загрузить модель:\n' + (err?.message || err));
+    });
+});
+
+/* ============================================================
+   11. АНИМАЦИОННЫЙ ЦИКЛ
+   ============================================================ */
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // плавная подсветка мышц
+  for (let i = 0; i < pickables.length; i++) {
+    const mesh = pickables[i];
+    const target = selected.has(mesh.userData.muscle) ? 1 : 0;
+    const cur = mesh.userData.glow;
+    const next = cur + (target - cur) * Math.min(1, dt * 9);
+
+    if (Math.abs(next - cur) > 0.0005) {
+      mesh.userData.glow = next;
+      setGlow(mesh, next * 1.6);
+    }
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   12. RESIZE
+   ============================================================ */
+function onResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h, false);
+}
+addEventListener('resize', onResize);
+addEventListener('orientationchange', () => setTimeout(onResize, 250));
+window.visualViewport?.addEventListener('resize', onResize);
+
+/* ============================================================
+   13. СТАРТ
+   ============================================================ */
+async function boot() {
+  const loaderEl = document.getElementById('loader');
+
+  let loaded = false;
+
+  // Пытаемся найти внешний model.glb (только по http/https)
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    try {
+      const res = await fetch(MODEL_URL, { method: 'HEAD', cache: 'no-store' });
+      const ct  = res.headers.get('content-type') || '';
+      if (res.ok && !ct.includes('text/html')) {
+        await loadGLB(MODEL_URL);
+        badgeEl.textContent = 'GLB MODEL';
+        loaded = true;
+      }
+    } catch (_) { /* нет файла — используем placeholder */ }
+  }
+
+  if (!loaded) {
+    const placeholder = buildPlaceholder();
+    scene.add(placeholder);
+    currentModel = placeholder;
+    prepare(placeholder);
+    badgeEl.textContent = 'PLACEHOLDER';
+  }
+
+  loaderEl.classList.add('hide');
+  setTimeout(() => loaderEl.remove(), 600);
+
+  animate();
+}
+
+boot();
+
+/* ============================================================
+   14. ПУБЛИЧНЫЙ API (для встраивания в приложение / Telegram Mini App)
+   ============================================================ */
+window.QFitness3D = {
+  select: (key) => toggleMuscle(key),
+  selectOnly,
+  reset: resetSelection,
+  getSelection: () => Array.from(selected),
+  loadModel: (url) => loadGLB(url),
+  focusOn: (key) => selectOnly(key),
+  scene, camera, renderer, controls,
+};
+</script>
+</body>
+</html>
